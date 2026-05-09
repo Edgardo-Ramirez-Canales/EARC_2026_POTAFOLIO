@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>EDR | AI Server Room</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Fira+Code:wght@400;500&display=swap');
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{overflow:hidden;background:#4a8ec2;font-family:'Inter',sans-serif;color:#e2e8f0;}
+
+  canvas{display:block;}
+
+  #loading{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#080c14;transition:opacity .8s;}
+  #loading.hidden{opacity:0;pointer-events:none;}
+  #loading h1{font-size:1.8rem;font-weight:900;background:linear-gradient(135deg,#00d4ff,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  #loading p{color:#64748b;font-size:.85rem;margin-top:.5rem;font-family:'Fira Code',monospace;}
+  .loader-bar{width:200px;height:3px;background:#1e2d45;border-radius:2px;margin-top:1.5rem;overflow:hidden;}
+  .loader-bar-inner{width:0%;height:100%;background:linear-gradient(90deg,#00d4ff,#7c3aed);border-radius:2px;transition:width .3s;}
+
+  #start-screen{position:fixed;inset:0;z-index:500;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,12,20,.75);cursor:pointer;user-select:none;}
+  #start-screen .title{font-size:2rem;font-weight:900;background:linear-gradient(135deg,#00d4ff,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  #start-screen .sub{color:#94a3b8;font-size:.9rem;margin-top:.8rem;}
+  #start-screen .key{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:.15rem .5rem;font-family:'Fira Code',monospace;font-size:.8rem;color:#94a3b8;margin:0 .15rem;}
+
+  #hud{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;text-align:center;opacity:0;transition:opacity .5s;}
+  #hud.show{opacity:1;}
+  #hud .keys{color:#64748b;font-size:.75rem;font-family:'Fira Code',monospace;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);padding:.5rem 1rem;border-radius:8px;display:inline-block;}
+  #hud .keys span{display:inline-block;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:.1rem .4rem;margin:0 .1rem;}
+
+  #speed-meter{position:fixed;bottom:1.5rem;right:1.5rem;z-index:10;pointer-events:none;font-family:'Fira Code',monospace;font-size:1.1rem;color:#00d4ff;text-shadow:0 0 10px rgba(0,212,255,.3);opacity:0;transition:opacity .5s;}
+  #speed-meter.show{opacity:1;}
+  #speed-meter .unit{font-size:.6rem;color:#64748b;margin-left:.2rem;}
+
+  #tooltip{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;pointer-events:none;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.3);border-radius:8px;padding:.5rem 1.2rem;font-size:.85rem;color:#00d4ff;opacity:0;transition:opacity .25s;backdrop-filter:blur(8px);white-space:nowrap;font-weight:500;margin-top:2rem;}
+  #tooltip.show{opacity:1;}
+  #tooltip .key{display:inline-block;background:rgba(0,212,255,.15);border:1px solid rgba(0,212,255,.3);border-radius:3px;padding:.05rem .35rem;font-family:'Fira Code',monospace;font-size:.75rem;margin-right:.3rem;}
+
+  #zone-label{position:fixed;top:1.5rem;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;font-size:.9rem;font-weight:600;opacity:0;transition:opacity .4s;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);padding:.4rem 1rem;border-radius:8px;border:1px solid rgba(255,255,255,.1);}
+  #zone-label.show{opacity:1;}
+
+  #back{position:fixed;top:1.5rem;left:1.5rem;z-index:20;background:rgba(8,12,20,.7);border:1px solid #1e2d45;border-radius:8px;padding:.5rem 1rem;color:#64748b;text-decoration:none;font-size:.82rem;font-weight:500;transition:.2s;backdrop-filter:blur(8px);display:flex;align-items:center;gap:.4rem;}
+  #back:hover{border-color:#00d4ff;color:#00d4ff;}
+
+  #panel{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);}
+  #panel.open{display:flex;}
+  #panel .card{background:linear-gradient(145deg,#141b2d,#0d1220);border:1px solid #1e2d45;border-radius:16px;padding:2.5rem;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;position:relative;animation:panelIn .3s ease-out;}
+  @keyframes panelIn{from{opacity:0;transform:scale(.95) translateY(10px);}to{opacity:1;transform:scale(1) translateY(0);}}
+  #panel .card-icon{font-size:2.5rem;margin-bottom:.8rem;display:block;}
+  #panel .card-title{font-size:1.3rem;font-weight:700;margin-bottom:.5rem;}
+  #panel .card-desc{color:#94a3b8;font-size:.88rem;line-height:1.7;margin-bottom:1.2rem;}
+  #panel .card-techs{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.5rem;}
+  #panel .card-tech{background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);border-radius:5px;padding:.25rem .7rem;font-size:.72rem;color:#00d4ff;font-family:'Fira Code',monospace;font-weight:500;}
+  #panel .card-close{background:transparent;border:1px solid #1e2d45;border-radius:8px;padding:.6rem 1.5rem;color:#64748b;font-size:.82rem;cursor:pointer;transition:.2s;font-family:'Inter',sans-serif;font-weight:500;}
+  #panel .card-close:hover{border-color:#00d4ff;color:#00d4ff;}
+  #panel .card-cta{display:inline-block;background:linear-gradient(135deg,#00d4ff,#7c3aed);border:none;border-radius:8px;padding:.6rem 1.5rem;color:#fff;font-size:.82rem;font-weight:600;cursor:pointer;text-decoration:none;margin-left:.5rem;transition:.2s;}
+  #panel .card-cta:hover{opacity:.85;}
+
+  #mobile-warn{position:fixed;inset:0;z-index:900;display:none;align-items:center;justify-content:center;background:#080c14;padding:2rem;text-align:center;}
+  #mobile-warn h2{font-size:1.3rem;font-weight:700;margin-bottom:.5rem;}
+  #mobile-warn p{color:#64748b;font-size:.88rem;}
+
+  @media(max-width:768px),(pointer:coarse){#mobile-warn{display:flex;}#loading{display:none;}}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <h1>EDR World</h1>
+  <p>Inicializando mundo...</p>
+  <div class="loader-bar"><div class="loader-bar-inner" id="loader-bar"></div></div>
+</div>
+
+<div id="mobile-warn">
+  <div>
+    <h2>🖥️ Modo PC requerido</h2>
+    <p>Esta experiencia 3D requiere teclado y mouse.</p>
+    <br>
+    <a href="portfolio_edgardo_2.0.html" style="color:#00d4ff;font-size:.85rem;">← Volver al portafolio</a>
+  </div>
+</div>
+
+<div id="start-screen">
+  <div class="title">EDR World</div>
+  <p class="sub">Haz clic para comenzar a conducir</p>
+  <p style="margin-top:1.5rem;color:#64748b;font-size:.78rem;font-family:'Fira Code',monospace;">
+    <span class="key">W</span> Acelerar · <span class="key">S</span> Frenar · <span class="key">A</span><span class="key">D</span> Girar · <span class="key">E</span> Interactuar · <span class="key">SHIFT</span> Turbo
+  </p>
+</div>
+
+<div id="hud">
+  <div class="keys"><span>W</span> acelerar · <span>S</span> frenar · <span>A</span><span>D</span> girar · <span>SHIFT</span> turbo · <span>E</span> interactuar · <span>ESC</span> salir</div>
+</div>
+
+<div id="speed-meter">0 <span class="unit">km/h</span></div>
+
+<div id="zone-label"></div>
+
+<div id="tooltip"><span class="key">E</span> Explorar</div>
+
+<a id="back" href="portfolio_edgardo_2.0.html">← Volver al Portafolio</a>
+
+<div id="panel">
+  <div class="card">
+    <span class="card-icon" id="p-icon"></span>
+    <div class="card-title" id="p-title"></div>
+    <div class="card-desc" id="p-desc"></div>
+    <div class="card-techs" id="p-techs"></div>
+    <div style="display:flex;gap:.5rem;">
+      <button class="card-close" onclick="closePanel()">Cerrar</button>
+      <a class="card-cta" id="p-cta" href="portfolio_edgardo_2.0.html">Ver en Portafolio →</a>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const rackData = [
+  {
+    id: 'fullstack', title: 'Full Stack Developer', icon: '🌐',
+    desc: 'Desarrollo de aplicaciones web escalables con Angular, React, Java y Spring Boot.',
+    techs: ['Angular', 'React', 'Java', 'Spring Boot', 'TypeScript', 'Node.js', 'Nest.js'],
+    color: '#00d4ff', hex: 0x00d4ff
+  },
+  {
+    id: 'ia-auto', title: 'IA & Automatización', icon: '🤖',
+    desc: 'Workflows inteligentes con n8n, integración de LLMs y automatización de procesos empresariales.',
+    techs: ['n8n', 'LLMs / GPT', 'RAG', 'Prompt Engineering', 'AI Workflows'],
+    color: '#7c3aed', hex: 0x7c3aed
+  },
+  {
+    id: 'databases', title: 'Bases de Datos', icon: '🗄️',
+    desc: 'Optimización de bases de datos en entornos financieros críticos. Oracle, SQL Server y PL/SQL.',
+    techs: ['Oracle', 'SQL Server', 'PostgreSQL', 'MongoDB', 'PL/SQL'],
+    color: '#06d6a0', hex: 0x06d6a0
+  },
+  {
+    id: 'experience', title: 'Experiencia Profesional', icon: '💼',
+    desc: '+3 años en banca y fintech. Soporte a producción, Core Bancario y monitoreo Dynatrace.',
+    techs: ['Ficohsa', 'Core Bancario', 'Dynatrace', 'WebLogic', 'Antifraude'],
+    color: '#f59e0b', hex: 0xf59e0b
+  },
+  {
+    id: 'contact', title: 'Contacto', icon: '📧',
+    desc: 'Abierto a nuevas oportunidades y proyectos freelance. ¡Hablemos!',
+    techs: ['ramirezedgardo92@gmail.com', 'LinkedIn', 'GitHub', 'Honduras'],
+    color: '#ef4444', hex: 0xef4444
+  }
+];
+
+const loaderBar = document.getElementById('loader-bar');
+const loading = document.getElementById('loading');
+const startScreen = document.getElementById('start-screen');
+const hud = document.getElementById('hud');
+const speedEl = document.getElementById('speed-meter');
+const tooltip = document.getElementById('tooltip');
+const zoneLabel = document.getElementById('zone-label');
+const panel = document.getElementById('panel');
+
+function updateLoader(v) { loaderBar.style.width = v + '%'; }
+updateLoader(10);
+
+// ─── Scene ───
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.Fog(0x87CEEB, 35, 60);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 80);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.prepend(renderer.domElement);
+
+updateLoader(20);
+
+// ─── Lights ───
+const ambient = new THREE.AmbientLight(0x8899bb, 0.5);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
+sun.position.set(30, 40, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 80;
+sun.shadow.camera.left = -40;
+sun.shadow.camera.right = 40;
+sun.shadow.camera.top = 40;
+sun.shadow.camera.bottom = -40;
+scene.add(sun);
+
+const hemi = new THREE.HemisphereLight(0x87CEEB, 0x3a7d44, 0.6);
+scene.add(hemi);
+
+updateLoader(30);
+
+// ─── Ground ───
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x7ec850,
+  roughness: 0.9,
+  metalness: 0.0
+});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.05;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Grid
+const grid = new THREE.GridHelper(120, 60, 0x5ca839, 0x5ca839);
+grid.position.y = 0.01;
+grid.material.transparent = true;
+grid.material.opacity = 0.15;
+scene.add(grid);
+
+updateLoader(40);
+
+// ─── Zone positions ───
+const angles = [0, 72, 144, 216, 288].map(d => d * Math.PI / 180);
+const zonePos = angles.map(a => ({
+  x: Math.sin(a) * 14,
+  z: Math.cos(a) * 14
+}));
+
+// Zone ground patches
+zonePos.forEach((pos, i) => {
+  const d = rackData[i];
+  const patch = new THREE.Mesh(
+    new THREE.CircleGeometry(5, 24),
+    new THREE.MeshStandardMaterial({ color: d.hex, transparent: true, opacity: 0.12, side: THREE.DoubleSide })
+  );
+  patch.rotation.x = -Math.PI / 2;
+  patch.position.set(pos.x, 0.01, pos.z);
+  scene.add(patch);
+});
+
+updateLoader(50);
+
+// ─── Roads ───
+function createRoad(from, to, w) {
+  const dx = to.x - from.x, dz = to.z - from.z;
+  const len = Math.sqrt(dx * dx + dz * dz);
+  const ang = Math.atan2(dx, dz);
+  const road = new THREE.Mesh(
+    new THREE.BoxGeometry(w, 0.08, len),
+    new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8, metalness: 0.1 })
+  );
+  road.position.set((from.x + to.x) / 2, 0.02, (from.z + to.z) / 2);
+  road.rotation.y = ang;
+  road.receiveShadow = true;
+  scene.add(road);
+}
+
+// Center hub
+const hub = new THREE.Mesh(
+  new THREE.CircleGeometry(3, 24),
+  new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8 })
+);
+hub.rotation.x = -Math.PI / 2;
+hub.position.y = 0.02;
+scene.add(hub);
+
+zonePos.forEach(pos => createRoad({ x: 0, z: 0 }, pos, 2));
+
+// Ring road
+for (let i = 0; i < zonePos.length; i++) {
+  const j = (i + 1) % zonePos.length;
+  // Only connect if not too far
+  createRoad(zonePos[i], zonePos[j], 1.5);
+}
+
+// Road markings (center line dashes)
+function createMarkings(from, to) {
+  const dx = to.x - from.x, dz = to.z - from.z;
+  const len = Math.sqrt(dx * dx + dz * dz);
+  const ang = Math.atan2(dx, dz);
+  const count = Math.floor(len / 1.5);
+  for (let k = 0; k < count; k++) {
+    const t = (k + 0.5) / count;
+    const mark = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.02, 0.6),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })
+    );
+    mark.position.set(
+      from.x + dx * t,
+      0.06,
+      from.z + dz * t
+    );
+    mark.rotation.y = ang;
+    scene.add(mark);
+  }
+}
+zonePos.forEach(pos => createMarkings({ x: 0, z: 0 }, pos));
+
+updateLoader(60);
+
+// ─── Trees ───
+function createTree(x, z, scale = 1) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15 * scale, 0.2 * scale, 0.8 * scale, 6),
+    new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.9 })
+  );
+  trunk.position.y = 0.4 * scale;
+  trunk.castShadow = true;
+  g.add(trunk);
+
+  const foliage = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7 * scale, 6, 6),
+    new THREE.MeshStandardMaterial({ color: 0x4CAF50, roughness: 0.8 })
+  );
+  foliage.position.y = 1.2 * scale;
+  foliage.castShadow = true;
+  g.add(foliage);
+
+  g.position.set(x, 0, z);
+  return g;
+}
+
+const treePositions = [];
+for (let i = 0; i < 120; i++) {
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 4 + Math.random() * 25;
+  treePositions.push({ x: Math.cos(angle) * dist, z: Math.sin(angle) * dist });
+}
+treePositions.forEach(p => {
+  if (p.x > -3 && p.x < 3 && p.z > -3 && p.z < 3) return;
+  scene.add(createTree(p.x, p.z, 0.5 + Math.random() * 0.5));
+});
+
+updateLoader(70);
+
+// ─── Buildings ───
+const buildings = [];
+
+function createBuilding(data, pos) {
+  const g = new THREE.Group();
+  g.position.set(pos.x, 0, pos.z);
+
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
+    roughness: 0.4,
+    metalness: 0.1
+  });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.0, 2.5), bodyMat);
+  body.position.y = 1.0;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  g.add(body);
+
+  // Roof
+  const roofMat = new THREE.MeshStandardMaterial({
+    color: data.hex,
+    roughness: 0.3,
+    metalness: 0.5
+  });
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.15, 2.8), roofMat);
+  roof.position.y = 2.08;
+  g.add(roof);
+
+  // Accent strip
+  const accent = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 0.1, 0.1),
+    new THREE.MeshStandardMaterial({ color: data.hex, emissive: data.hex, emissiveIntensity: 0.3 })
+  );
+  accent.position.set(0, 1.0, 1.26);
+  g.add(accent);
+
+  // Windows (emissive strips)
+  for (let wy = 0; wy < 3; wy++) {
+    const win = new THREE.Mesh(
+      new THREE.BoxGeometry(1.8, 0.02, 0.02),
+      new THREE.MeshStandardMaterial({
+        color: data.hex, emissive: data.hex, emissiveIntensity: 0.15 + wy * 0.05
+      })
+    );
+    win.position.set(0, 0.3 + wy * 0.5, 1.26);
+    g.add(win);
+  }
+
+  // Icon float above
+  const iconCanvas = document.createElement('canvas');
+  iconCanvas.width = 128;
+  iconCanvas.height = 128;
+  const ctx = iconCanvas.getContext('2d');
+  ctx.fillStyle = 'transparent';
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.font = '80px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(data.icon, 64, 64);
+  const iconTex = new THREE.CanvasTexture(iconCanvas);
+  const iconMat = new THREE.SpriteMaterial({ map: iconTex, transparent: true, depthTest: false });
+  const icon = new THREE.Sprite(iconMat);
+  icon.scale.set(0.8, 0.8, 1);
+  icon.position.y = 3.2;
+  g.add(icon);
+
+  // Glow around
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.5, 3.5),
+    new THREE.MeshBasicMaterial({
+      color: data.hex, transparent: true, opacity: 0.06, side: THREE.DoubleSide
+    })
+  );
+  glow.position.set(0, 1.8, 0);
+  glow.userData.baseOpacity = 0.06;
+  g.add(glow);
+
+  // Point light
+  const pl = new THREE.PointLight(data.hex, 0.4, 8);
+  pl.position.set(0, 1.5, 2);
+  g.add(pl);
+
+  g.userData = { data, isBuilding: true };
+  scene.add(g);
+  buildings.push(g);
+  return g;
+}
+
+rackData.forEach((d, i) => createBuilding(d, zonePos[i]));
+
+updateLoader(80);
+
+// ─── Lamp posts ───
+function createLamp(x, z) {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.07, 0.8, 6),
+    new THREE.MeshStandardMaterial({ color: 0x718096, metalness: 0.6, roughness: 0.3 })
+  );
+  pole.position.y = 0.4;
+  g.add(pole);
+  const arm = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 0.3, 4),
+    new THREE.MeshStandardMaterial({ color: 0x718096, metalness: 0.6 })
+  );
+  arm.rotation.z = Math.PI / 2;
+  arm.position.set(0.15, 0.8, 0);
+  g.add(arm);
+  const bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.08, 6, 6),
+    new THREE.MeshStandardMaterial({ color: 0xffdd88, emissive: 0xffdd88, emissiveIntensity: 0.5 })
+  );
+  bulb.position.set(0.3, 0.8, 0);
+  g.add(bulb);
+  const pl = new THREE.PointLight(0xffdd88, 0.3, 4);
+  pl.position.set(0.3, 0.8, 0);
+  g.add(pl);
+  g.position.set(x, 0, z);
+  return g;
+}
+
+// Lamps along roads
+for (let i = 0; i < zonePos.length; i++) {
+  for (let t = 0.2; t < 0.9; t += 0.25) {
+    const p = zonePos[i];
+    const lx = p.x * t, lz = p.z * t;
+    scene.add(createLamp(lx + 0.5, lz));
+    scene.add(createLamp(lx - 0.5, lz));
+  }
+}
+
+updateLoader(85);
+
+// ─── Car ───
+const carGroup = new THREE.Group();
+
+// Body
+const bodyMat = new THREE.MeshStandardMaterial({
+  color: 0x1a202c, metalness: 0.7, roughness: 0.2
+});
+const carBody = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 2.8), bodyMat);
+carBody.position.y = 0.3;
+carBody.castShadow = true;
+carGroup.add(carBody);
+
+// Cabin
+const cabinMat = new THREE.MeshStandardMaterial({
+  color: 0x2d3748, metalness: 0.8, roughness: 0.1, transparent: true, opacity: 0.6
+});
+const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.35, 1.3), cabinMat);
+cabin.position.set(0, 0.58, -0.2);
+carGroup.add(cabin);
+
+// Spoiler
+const spoiler = new THREE.Mesh(
+  new THREE.BoxGeometry(1.2, 0.06, 0.3),
+  new THREE.MeshStandardMaterial({ color: 0x00d4ff, metalness: 0.5 })
+);
+spoiler.position.set(0, 0.55, -1.45);
+carGroup.add(spoiler);
+
+// Bumper front
+const bumper = new THREE.Mesh(
+  new THREE.BoxGeometry(1.3, 0.12, 0.15),
+  new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8 })
+);
+bumper.position.set(0, 0.12, 1.42);
+carGroup.add(bumper);
+
+// Headlights
+const hlMat = new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffffaa, emissiveIntensity: 0.5 });
+[-0.4, 0.4].forEach(x => {
+  const hl = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), hlMat);
+  hl.position.set(x, 0.2, 1.42);
+  carGroup.add(hl);
+});
+
+// Taillights
+const tlMat = new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0xff3333, emissiveIntensity: 0.3 });
+[-0.4, 0.4].forEach(x => {
+  const tl = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.06, 0.04), tlMat);
+  tl.position.set(x, 0.2, -1.42);
+  carGroup.add(tl);
+});
+
+// Wheels
+const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a202c, roughness: 0.9 });
+const rimMat = new THREE.MeshStandardMaterial({ color: 0x718096, metalness: 0.8, roughness: 0.2 });
+const wheels = [];
+const wheelPositions = [
+  { x: -0.7, z: 0.9 }, { x: 0.7, z: 0.9 },
+  { x: -0.7, z: -0.9 }, { x: 0.7, z: -0.9 }
+];
+wheelPositions.forEach(p => {
+  const wg = new THREE.Group();
+  const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.12, 8), wheelMat);
+  tire.rotation.x = Math.PI / 2;
+  wg.add(tire);
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.13, 6), rimMat);
+  rim.rotation.x = Math.PI / 2;
+  wg.add(rim);
+  wg.position.set(p.x, 0.15, p.z);
+  wg.userData.wheelIndex = wheels.length;
+  carGroup.add(wg);
+  wheels.push(wg);
+});
+
+// Underside glow
+const underGlow = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.4, 2.6),
+  new THREE.MeshBasicMaterial({
+    color: 0x00d4ff, transparent: true, opacity: 0.15, side: THREE.DoubleSide
+  })
+);
+underGlow.rotation.x = -Math.PI / 2;
+underGlow.position.y = 0.05;
+carGroup.add(underGlow);
+
+carGroup.position.set(0, 0, 0);
+scene.add(carGroup);
+
+updateLoader(90);
+
+// ─── Car State ───
+const car = {
+  position: new THREE.Vector3(0, 0, 0),
+  rotation: 0,
+  speed: 0,
+  maxSpeed: 14,
+  accel: 10,
+  brakeForce: 12,
+  friction: 4,
+  turnSpeed: 3,
+  tilt: 0
+};
+
+const keys = { w: false, s: false, a: false, d: false, shift: false };
+let locked = false;
+let panelOpen = false;
+let selectedBuilding = null;
+
+// ─── Loading done ───
+setTimeout(() => {
+  updateLoader(100);
+  setTimeout(() => {
+    loading.classList.add('hidden');
+    startScreen.style.display = 'flex';
+  }, 400);
+}, 500);
+
+// ─── Events ───
+startScreen.addEventListener('click', () => {
+  startScreen.style.display = 'none';
+  locked = true;
+  hud.classList.add('show');
+  speedEl.classList.add('show');
+  renderer.domElement.requestPointerLock();
+});
+
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement) {
+    if (!panelOpen) {
+      locked = false;
+      hud.classList.remove('show');
+      speedEl.classList.remove('show');
+      tooltip.classList.remove('show');
+      zoneLabel.classList.remove('show');
+      startScreen.style.display = 'flex';
+    }
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && panelOpen) {
+    closePanel();
+    return;
+  }
+  if (!locked) return;
+  if (panelOpen) return;
+
+  switch (e.code) {
+    case 'KeyW': keys.w = true; break;
+    case 'KeyS': keys.s = true; break;
+    case 'KeyA': keys.a = true; break;
+    case 'KeyD': keys.d = true; break;
+    case 'ShiftLeft':
+    case 'ShiftRight': keys.shift = true; break;
+    case 'KeyE':
+      if (selectedBuilding) openPanel(selectedBuilding);
+      break;
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  switch (e.code) {
+    case 'KeyW': keys.w = false; break;
+    case 'KeyS': keys.s = false; break;
+    case 'KeyA': keys.a = false; break;
+    case 'KeyD': keys.d = false; break;
+    case 'ShiftLeft':
+    case 'ShiftRight': keys.shift = false; break;
+  }
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ─── Panel ───
+function closePanel() {
+  if (!panelOpen) return;
+  panelOpen = false;
+  panel.classList.remove('open');
+  locked = true;
+  renderer.domElement.requestPointerLock();
+}
+window.closePanel = closePanel;
+
+function openPanel(building) {
+  const d = building.userData.data;
+  document.getElementById('p-icon').textContent = d.icon;
+  document.getElementById('p-title').textContent = d.title;
+  document.getElementById('p-desc').textContent = d.desc;
+
+  const techsEl = document.getElementById('p-techs');
+  techsEl.innerHTML = '';
+  d.techs.forEach(t => {
+    const el = document.createElement('span');
+    el.className = 'card-tech';
+    el.textContent = t;
+    techsEl.appendChild(el);
+  });
+
+  panelOpen = true;
+  panel.classList.add('open');
+  document.exitPointerLock();
+}
+
+// ─── Animation ───
+const clock = new THREE.Clock();
+const camOffset = new THREE.Vector3(0, 4.5, -7);
+const _targetPos = new THREE.Vector3();
+const _carDir = new THREE.Vector3();
+const _behind = new THREE.Vector3();
+
+function animate() {
+  const delta = Math.min(clock.getDelta(), 0.05);
+  const elapsed = clock.elapsedTime;
+
+  // Driving
+  if (locked && !panelOpen) {
+    const boost = keys.shift ? 1.5 : 1;
+    if (keys.w) car.speed += car.accel * delta * boost;
+    if (keys.s) car.speed -= car.brakeForce * delta;
+    car.speed -= Math.sign(car.speed) * car.friction * delta;
+    if (Math.abs(car.speed) < 0.05) car.speed = 0;
+    car.speed = Math.max(-5, Math.min(car.maxSpeed * boost, car.speed));
+
+    // Steering
+    const moving = Math.abs(car.speed) > 0.3;
+    const turnFactor = moving ? (car.speed / car.maxSpeed) : 0;
+    if (keys.a) car.rotation -= car.turnSpeed * delta * turnFactor;
+    if (keys.d) car.rotation += car.turnSpeed * delta * turnFactor;
+
+    // Tilt
+    const targetTilt = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
+    car.tilt += (targetTilt * 0.08 - car.tilt) * 0.05;
+
+    // Position
+    car.position.x += Math.sin(car.rotation) * car.speed * delta;
+    car.position.z += Math.cos(car.rotation) * car.speed * delta;
+  }
+
+  // Update car mesh
+  carGroup.position.copy(car.position);
+  carGroup.rotation.y = car.rotation;
+  carGroup.rotation.z = car.tilt * 0.06;
+
+  // Spin wheels
+  wheels.forEach(w => {
+    w.children[0].rotation.x += car.speed * delta * 8;
+    w.children[1].rotation.x += car.speed * delta * 8;
+  });
+
+  // Speed meter
+  const spd = Math.round(Math.abs(car.speed) * 7);
+  speedEl.innerHTML = `${spd} <span class="unit">km/h</span>`;
+
+  // Underside glow pulse
+  underGlow.material.opacity = 0.1 + Math.sin(elapsed * 2) * 0.05;
+
+  // Camera follow
+  _carDir.set(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), car.rotation);
+  _behind.copy(_carDir).multiplyScalar(camOffset.z);
+  _targetPos.copy(car.position).add(_behind).add(new THREE.Vector3(0, camOffset.y, 0));
+  camera.position.lerp(_targetPos, 0.06);
+  camera.lookAt(car.position.x, car.position.y + 0.3, car.position.z);
+
+  // Proximity detection for buildings
+  let nearest = null;
+  let nearDist = Infinity;
+  buildings.forEach(b => {
+    const dist = car.position.distanceTo(b.position);
+    if (dist < 5 && dist < nearDist) {
+      nearest = b;
+      nearDist = dist;
+    }
+  });
+
+  if (nearest && locked && !panelOpen) {
+    selectedBuilding = nearest;
+    tooltip.classList.add('show');
+    const d = nearest.userData.data;
+    zoneLabel.textContent = `${d.icon} ${d.title}`;
+    zoneLabel.style.borderColor = d.color;
+    zoneLabel.style.color = d.color;
+    zoneLabel.classList.add('show');
+  } else {
+    selectedBuilding = null;
+    tooltip.classList.remove('show');
+    zoneLabel.classList.remove('show');
+  }
+
+  // Animate building glow
+  buildings.forEach((b, i) => {
+    const glow = b.children.find(c => c.userData && c.userData.baseOpacity !== undefined);
+    if (glow) {
+      glow.material.opacity = glow.userData.baseOpacity + Math.sin(elapsed * 0.5 + i) * 0.03;
+    }
+  });
+
+  // Animate tree foliage (subtle sway)
+  treePositions.forEach((_, i) => {
+    // Skip for performance
+  });
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
