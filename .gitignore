@@ -22,3 +22,8 @@ package-lock.json
 # Variables de entorno
 .env
 .env.local
+
+# Archivos locales
+.claude/
+*:Zone.Identifier
+Nota.txt
